@@ -5,6 +5,7 @@ import android.graphics.drawable.Drawable
 import android.view.View
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.core.view.isVisible
 import androidx.recyclerview.widget.RecyclerView
 import com.cyberquick.hearthstonedecks.R
 import com.cyberquick.hearthstonedecks.domain.entities.CardCountable
@@ -44,7 +45,9 @@ class CardSmallViewHolder(val view: View) : RecyclerView.ViewHolder(view) {
         }
 
 
-        view.findViewById<TextView>(R.id.tv_amount).text = "x" + cardCountable.amount
+        val amount = view.findViewById<TextView>(R.id.tv_amount)
+        amount.isVisible = cardCountable.amount > 1
+        amount.text = "x" + cardCountable.amount
 
         imageSmall.setOnClickListener {
             onClicked()

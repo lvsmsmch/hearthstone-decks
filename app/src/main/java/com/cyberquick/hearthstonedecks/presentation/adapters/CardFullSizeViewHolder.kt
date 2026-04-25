@@ -5,6 +5,7 @@ import android.view.View
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.core.view.isVisible
 import androidx.recyclerview.widget.RecyclerView
 import com.cyberquick.hearthstonedecks.R
 import com.cyberquick.hearthstonedecks.presentation.common.entities.CardFullSizeData
@@ -47,6 +48,7 @@ class CardFullSizeViewHolder(val view: View) : RecyclerView.ViewHolder(view) {
         }
 
         val copies = view.findViewById<TextView>(R.id.copies)
+        copies.isVisible = cardData.cardCountable.amount > 1
         copies.text = "x${cardData.cardCountable.amount}"
     }
 }

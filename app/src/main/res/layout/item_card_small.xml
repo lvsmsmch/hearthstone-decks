@@ -4,13 +4,6 @@
     android:layout_height="wrap_content"
     android:backgroundTint="@android:color/transparent">
 
-<!--    <ImageView-->
-<!--        android:layout_width="match_parent"-->
-<!--        android:layout_height="match_parent"-->
-<!--        android:contentDescription="@null"-->
-<!--        android:adjustViewBounds="true"-->
-<!--        android:src="@drawable/card_placeholder" />-->
-
     <ImageView
         android:id="@+id/img_card_small"
         android:layout_width="match_parent"
