@@ -100,9 +100,10 @@ dependencies {
     kapt libs.hilt.android.compiler
     kapt libs.androidx.hilt.compiler
 
-    // Retrofit 2
+    // Retrofit 2 / OkHttp
     implementation libs.retrofit
     implementation libs.retrofit.converter.gson
+    implementation libs.okhttp
 
     // Blur
     implementation libs.blurry

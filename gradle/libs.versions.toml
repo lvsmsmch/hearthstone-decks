@@ -27,6 +27,7 @@ hiltCompiler = "1.2.0"
 
 # Network / parsing
 retrofit = "2.11.0"
+okhttp = "4.12.0"
 gson = "2.11.0"
 jsoup = "1.18.3"
 
@@ -76,6 +77,7 @@ androidx-hilt-compiler = { module = "androidx.hilt:hilt-compiler", version.ref =
 # Network / parsing
 retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit" }
 retrofit-converter-gson = { module = "com.squareup.retrofit2:converter-gson", version.ref = "retrofit" }
+okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
 jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
 

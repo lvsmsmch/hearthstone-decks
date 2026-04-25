@@ -9,54 +9,128 @@ import com.cyberquick.hearthstonedecks.domain.entities.DecksFilter
 import com.cyberquick.hearthstonedecks.domain.entities.Page
 import com.cyberquick.hearthstonedecks.domain.exceptions.LoadFailedException
 import com.cyberquick.hearthstonedecks.domain.exceptions.NoOnlineDecksFoundException
+import okhttp3.Cookie
+import okhttp3.CookieJar
+import okhttp3.HttpUrl
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import org.jsoup.HttpStatusException
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 class HearthpwnApi @Inject constructor() {
 
     companion object {
-        private const val MAX_TIMEOUT_LOADING = 10 * 1000   // 10s
+        private const val MAX_TIMEOUT_LOADING_MS = 10_000L
         private const val URL_ROOT = "https://www.hearthpwn.com"
         private const val URL_STANDARD_DECKS = URL_ROOT +
                 "/decks?filter-show-standard=1&filter-show-constructed-only=y"
         private const val URL_WILD_DECKS = URL_ROOT +
                 "/decks?filter-show-standard=2&filter-show-constructed-only=y"
+
+        // Tested against hearthpwn's Cloudflare: these UAs are classified as
+        // benign scripts and pass through; "real" Chrome/Safari UAs get a
+        // Managed Challenge (cf-mitigated: challenge) which Jsoup can't solve.
+        private val USER_AGENTS = listOf(
+            "okhttp/4.12.0",
+            "Mozilla/5.0 (jsoup)",
+            "Java/17.0.10",
+        )
+    }
+
+    private val cookieJar = InMemoryCookieJar()
+
+    private val httpClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(MAX_TIMEOUT_LOADING_MS, TimeUnit.MILLISECONDS)
+            .readTimeout(MAX_TIMEOUT_LOADING_MS, TimeUnit.MILLISECONDS)
+            .followRedirects(true)
+            .followSslRedirects(true)
+            .cookieJar(cookieJar)
+            .build()
     }
 
     private fun getDocument(url: String): Document {
-        Log.d("tag_hp_403", "REQ -> $url")
-        val response = Jsoup
-            .connect(url)
-            .maxBodySize(0)
-            .timeout(MAX_TIMEOUT_LOADING)
-            .ignoreHttpErrors(true)
-            .execute()
+        var lastFailure: Throwable? = null
 
-        val status = response.statusCode()
-        val headersOfInterest = listOf(
-            "server", "cf-ray", "cf-mitigated", "cf-cache-status",
-            "x-bot-score", "x-bot-type", "content-type", "content-length",
-            "set-cookie", "location"
-        ).joinToString(separator = " | ") { name ->
-            "$name=${response.header(name) ?: "-"}"
-        }
-        val bodySample = (response.body() ?: "").take(800).replace("\n", " ")
-        Log.d(
-            "tag_hp_403",
-            "RES <- status=$status url=${response.url()} headers[$headersOfInterest]"
-        )
-        Log.d("tag_hp_403", "BODY[0..800]: $bodySample")
+        for (ua in USER_AGENTS) {
+            val request = Request.Builder()
+                .url(url)
+                .header("User-Agent", ua)
+                .header(
+                    "Accept",
+                    "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+                )
+                .header("Accept-Language", "en-US,en;q=0.9")
+                .header("Referer", "$URL_ROOT/")
+                .build()
 
-        if (status !in 200..299) {
-            throw org.jsoup.HttpStatusException(
-                "HTTP error fetching URL. Status=$status, URL=[$url]",
-                status,
-                url
-            )
+            Log.d("tag_hp_403", "REQ ua=$ua -> $url")
+            try {
+                httpClient.newCall(request).execute().use { response ->
+                    val status = response.code
+                    val server = response.header("server")
+                    val cfMitigated = response.header("cf-mitigated")
+                    val cfRay = response.header("cf-ray")
+                    val contentType = response.header("content-type")
+                    val body = response.body?.string().orEmpty()
+                    val sample = body.take(400).replace("\n", " ")
+
+                    Log.d(
+                        "tag_hp_403",
+                        "RES ua=$ua status=$status server=$server cf-mitigated=$cfMitigated " +
+                                "cf-ray=$cfRay content-type=$contentType cookies=${cookieJar.snapshotForHost(request.url.host).size}"
+                    )
+
+                    if (status in 200..299) {
+                        Log.d("tag_hp_403", "OK ua=$ua bodyLen=${body.length}")
+                        return Jsoup.parse(body, url)
+                    }
+
+                    Log.d("tag_hp_403", "BODY[0..400]: $sample")
+                    lastFailure = HttpStatusException(
+                        "HTTP error fetching URL. Status=$status, URL=[$url]",
+                        status,
+                        url
+                    )
+                }
+            } catch (e: IOException) {
+                Log.d("tag_hp_403", "IO failure ua=$ua: ${e.javaClass.simpleName}: ${e.message}")
+                lastFailure = e
+            }
         }
-        return response.parse()
+
+        throw lastFailure
+            ?: IOException("HTTP error fetching URL. Status=-1, URL=[$url] (all UA attempts failed)")
+    }
+
+    private class InMemoryCookieJar : CookieJar {
+        private val store = ConcurrentHashMap<String, MutableList<Cookie>>()
+
+        override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+            if (cookies.isEmpty()) return
+            val bucket = store.getOrPut(url.host) { mutableListOf() }
+            synchronized(bucket) {
+                bucket.removeAll { existing -> cookies.any { it.name == existing.name } }
+                bucket.addAll(cookies)
+            }
+        }
+
+        override fun loadForRequest(url: HttpUrl): List<Cookie> {
+            val bucket = store[url.host] ?: return emptyList()
+            val now = System.currentTimeMillis()
+            return synchronized(bucket) {
+                bucket.removeAll { it.expiresAt < now }
+                bucket.toList()
+            }
+        }
+
+        fun snapshotForHost(host: String): List<Cookie> =
+            store[host]?.toList().orEmpty()
     }
 
     /**
