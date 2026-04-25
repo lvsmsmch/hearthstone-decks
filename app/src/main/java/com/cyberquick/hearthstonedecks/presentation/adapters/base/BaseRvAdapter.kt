@@ -1,63 +1,35 @@
 package com.cyberquick.hearthstonedecks.presentation.adapters.base
 
-import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
-import kotlin.math.max
 
-abstract class BaseRvAdapter<T, VH : RecyclerView.ViewHolder> : RecyclerView.Adapter<VH>() {
+abstract class BaseRvAdapter<T : Any, VH : RecyclerView.ViewHolder>(
+    diffCallback: DiffUtil.ItemCallback<T> = SimpleEqualityDiffCallback(),
+) : ListAdapter<T, VH>(diffCallback) {
 
     abstract val layoutRes: Int
     abstract fun createViewHolder(view: View): VH
     abstract fun onBind(holder: VH, item: T)
 
-    protected val items = mutableListOf<T>()
+    fun set(newItems: List<T>) = submitList(newItems.toList())
 
-    fun clear() {
-        set(emptyList())
-    }
-
-    open fun set(newItems: List<T>) {
-        if (items == newItems) return
-        val oldItems = items.toList()
-        Log.i("tag_page", "Set ${newItems.size} items (old = ${items.size})")
-        items.clear()
-        items.addAll(newItems)
-
-//        notifyItemRangeChanged(0, newItems.size)
-//        repeat(max(oldItems.size, newItems.size)) { index ->
-//            val old = oldItems.getOrNull(index)
-//            val new = newItems.getOrNull(index)
-//
-//            when {
-//                old != null && new != null && old != new -> notifyItemChanged(index)
-//                old == null && new != null -> notifyItemInserted(index)
-//                old != null && new == null -> notifyItemRemoved(index)
-//            }
-//        }
-
-        notifyDataSetChanged()
-
-        Log.i("tag_page", "Finish setting items")
-//
-//        notifyItemRangeRemoved(0, oldItems.size)
-//        notifyItemRangeInserted(0, newItems.size)
-    }
+    fun clear() = submitList(emptyList())
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
-        val view = LayoutInflater.from(parent.context).inflate(
-            layoutRes, parent, false
-        )
+        val view = LayoutInflater.from(parent.context).inflate(layoutRes, parent, false)
         return createViewHolder(view)
     }
 
-    override fun getItemCount(): Int {
-        return items.size
-    }
-
     override fun onBindViewHolder(holder: VH, position: Int) {
-        onBind(holder, items[position])
+        onBind(holder, getItem(position))
     }
+}
+
+private class SimpleEqualityDiffCallback<T : Any> : DiffUtil.ItemCallback<T>() {
+    override fun areItemsTheSame(oldItem: T, newItem: T) = oldItem == newItem
+    override fun areContentsTheSame(oldItem: T, newItem: T) = oldItem == newItem
 }
