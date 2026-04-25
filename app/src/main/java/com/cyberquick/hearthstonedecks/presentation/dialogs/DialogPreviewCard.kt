@@ -5,9 +5,13 @@ import android.app.Dialog
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.view.View
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
+import androidx.core.view.updatePadding
 import androidx.viewpager2.widget.ViewPager2
 import com.cyberquick.hearthstonedecks.R
 import com.cyberquick.hearthstonedecks.databinding.DialogCardFullSizeBinding
@@ -18,7 +22,6 @@ import com.cyberquick.hearthstonedecks.utils.bold
 import com.cyberquick.hearthstonedecks.utils.fromHtml
 import com.cyberquick.hearthstonedecks.utils.logFirebaseEvent
 import com.cyberquick.hearthstonedecks.utils.navBarHeightPixels
-import com.cyberquick.hearthstonedecks.utils.statusBarHeightPixels
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import jp.wasabeef.blurry.Blurry
 
@@ -37,6 +40,15 @@ class DialogPreviewCard(
         super.onCreate(savedInstanceState)
         binding = DialogCardFullSizeBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        // Keep the dialog window fully edge-to-edge (matches the activity
+        // behind 1:1, no white bars at top/bottom). Insets are handled
+        // surgically below — only on the elements that must stay above the
+        // nav bar (the bottom sheet and its gradient overlay). The blur is
+        // intentionally drawn under the system bars so its colour matches
+        // the activity behind through the translucent bars.
+        window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        window?.navigationBarColor = Color.TRANSPARENT
 
         logFirebaseEvent(context, Event.CARDS_START_VIEWING)
 
@@ -58,6 +70,22 @@ class DialogPreviewCard(
                 else -> BottomSheetBehavior.STATE_EXPANDED
             }
         }
+
+        // Push the bottom-sheet content up by the real nav-bar inset so the
+        // text (Expansion / Quote / Artist) doesn't end up behind the 3-button
+        // bar or the gesture pill. We read the bottom inset from the activity's
+        // window (via sourceScreen.rootWindowInsets) — the framework dimen
+        // android:navigation_bar_height is unreliable on modern Android (often
+        // hard-coded to 48dp regardless of gesture/3-button mode).
+        //
+        // The bottom_sheet_overlay (40dp dark gradient at gravity=bottom) is
+        // intentionally NOT shifted up: it lives in the nav-bar zone where the
+        // system draws its buttons on top, so it stays out of the bottom-sheet
+        // text. Pushing it up would darken the last line of the quote text.
+        val navBarHeight = activityNavBarBottomInset()
+        bottomSheet.updatePadding(bottom = navBarHeight)
+        bottomSheetBehavior.peekHeight =
+            bottomSheetBehavior.peekHeight + navBarHeight
 
         binding.viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
@@ -103,6 +131,13 @@ class DialogPreviewCard(
             .fromHtml()
     }
 
+    private fun activityNavBarBottomInset(): Int {
+        val raw = sourceScreen.rootWindowInsets ?: return context.navBarHeightPixels()
+        val insets = WindowInsetsCompat.toWindowInsetsCompat(raw, sourceScreen)
+            .getInsets(WindowInsetsCompat.Type.navigationBars())
+        return insets.bottom.takeIf { it > 0 } ?: context.navBarHeightPixels()
+    }
+
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         onClosed()
@@ -115,21 +150,20 @@ class DialogPreviewCard(
     private fun screenShot(view: View): Bitmap? {
         val width = view.width
         val height = view.height
+        if (width <= 0 || height <= 0) return null
 
+        // Activity (edge-to-edge under targetSdk 35) and the dialog window
+        // share the same full-screen geometry — capture rootView 1:1 so the
+        // blurred backdrop aligns with what's behind the dialog including
+        // the status bar and nav bar zones.
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        view.draw(canvas)
-
-        val cutTop = context.statusBarHeightPixels()
-        val cutBottom = context.navBarHeightPixels()
-        val totalHeight = height - cutTop - cutBottom
-        val cutBitmap = Bitmap.createBitmap(bitmap, 0, cutTop, width, totalHeight)
+        view.draw(Canvas(bitmap))
 
         val scaleRatio = 6
         return Bitmap.createScaledBitmap(
-            cutBitmap,
-            cutBitmap.width / scaleRatio,
-            cutBitmap.height / scaleRatio,
+            bitmap,
+            bitmap.width / scaleRatio,
+            bitmap.height / scaleRatio,
             false
         )
     }

@@ -39,12 +39,12 @@ class CardSmallAdapter(
                 DialogPreviewCard(
                     holder.view.context,
                     sourceScreen = holder.view,
-                    cards = currentList.map {
+                    cards = items.map {
                         CardFullSizeData(
                             it, images[it], setsRepository.getDataAboutSet(it.card.cardSetId)
                         )
                     },
-                    selectedCardIndex = currentList.indexOf(item),
+                    selectedCardIndex = items.indexOf(item),
                     onClosed = {
                         clicksBlocked.set(false)
                     },
