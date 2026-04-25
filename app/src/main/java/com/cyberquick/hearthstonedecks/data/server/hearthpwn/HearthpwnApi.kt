@@ -26,11 +26,37 @@ class HearthpwnApi @Inject constructor() {
     }
 
     private fun getDocument(url: String): Document {
-        return Jsoup
+        Log.d("tag_hp_403", "REQ -> $url")
+        val response = Jsoup
             .connect(url)
             .maxBodySize(0)
             .timeout(MAX_TIMEOUT_LOADING)
-            .get()
+            .ignoreHttpErrors(true)
+            .execute()
+
+        val status = response.statusCode()
+        val headersOfInterest = listOf(
+            "server", "cf-ray", "cf-mitigated", "cf-cache-status",
+            "x-bot-score", "x-bot-type", "content-type", "content-length",
+            "set-cookie", "location"
+        ).joinToString(separator = " | ") { name ->
+            "$name=${response.header(name) ?: "-"}"
+        }
+        val bodySample = (response.body() ?: "").take(800).replace("\n", " ")
+        Log.d(
+            "tag_hp_403",
+            "RES <- status=$status url=${response.url()} headers[$headersOfInterest]"
+        )
+        Log.d("tag_hp_403", "BODY[0..800]: $bodySample")
+
+        if (status !in 200..299) {
+            throw org.jsoup.HttpStatusException(
+                "HTTP error fetching URL. Status=$status, URL=[$url]",
+                status,
+                url
+            )
+        }
+        return response.parse()
     }
 
     /**
