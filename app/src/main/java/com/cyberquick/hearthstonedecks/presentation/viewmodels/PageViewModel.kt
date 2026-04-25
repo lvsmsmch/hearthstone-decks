@@ -39,7 +39,8 @@ open class PageViewModel(
 
     private var filter: DecksFilter = DecksFilter.default
 
-    val pageState: LiveData<LoadingState<Page>> = MutableLiveData()
+    private val _pageState = MutableLiveData<LoadingState<Page>>()
+    val pageState: LiveData<LoadingState<Page>> = _pageState
 
     val position: LiveData<Position> = transformWithDefault(
         source = pageState,

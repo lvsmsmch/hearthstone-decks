@@ -9,5 +9,5 @@ import javax.inject.Inject
 @HiltViewModel
 class AboutAppViewModel @Inject constructor() : BaseViewModel() {
 
-    val items: LiveData<List<AboutAppItem>> = MutableLiveData(AboutAppItem.values().toList())
+    val items: LiveData<List<AboutAppItem>> = MutableLiveData(AboutAppItem.entries)
 }

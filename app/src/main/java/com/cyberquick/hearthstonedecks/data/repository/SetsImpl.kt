@@ -12,25 +12,41 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import java.util.Scanner
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
+import javax.inject.Singleton
 
+@Singleton
 class SetsImpl @Inject constructor(
     private val context: Context,
     private val battleNetApi: BattleNetRepository,
 ) : SetsRepository {
 
-    private var setsFromLocal: List<Expansion> = emptyList()
-    private var setsFromOnline: List<Expansion> = emptyList()
+    private val gson = Gson()
 
-    private var setGroupsFromLocal: List<ExpansionYear> = emptyList()
-    private var setGroupsFromOnline: List<ExpansionYear> = emptyList()
+    @Volatile private var setsFromLocal: List<Expansion> = emptyList()
+    @Volatile private var setsFromOnline: List<Expansion> = emptyList()
+
+    @Volatile private var setGroupsFromLocal: List<ExpansionYear> = emptyList()
+    @Volatile private var setGroupsFromOnline: List<ExpansionYear> = emptyList()
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val refreshMutex = Mutex()
 
     override fun refreshSets() {
-        CoroutineScope(Dispatchers.IO).launch {
-            refreshLocal()
-            refreshOnline()
+        scope.launch {
+            // Idempotent: while one refresh is in flight, additional calls (e.g. from
+            // a fresh activity) join it instead of stacking N parallel HTTP fetches.
+            if (!refreshMutex.tryLock()) return@launch
+            try {
+                refreshLocal()
+                refreshOnline()
+            } finally {
+                refreshMutex.unlock()
+            }
         }
     }
 
@@ -97,10 +113,10 @@ class SetsImpl @Inject constructor(
     }
 
     private inline fun <reified T> getListOfObjectFromJson(resourceId: Int): List<T> {
-        val inputStream = context.resources.openRawResource(resourceId)
-        val jsonString = Scanner(inputStream).useDelimiter("\\A").next()
+        val jsonString = context.resources.openRawResource(resourceId)
+            .use { it.bufferedReader().readText() }
         val tagGroupType = object : TypeToken<List<T>>() {}.type
-        return Gson().fromJson(jsonString, tagGroupType)
+        return gson.fromJson(jsonString, tagGroupType)
     }
 
 //    private fun getJsonFromResource(resourceId: Int): String {

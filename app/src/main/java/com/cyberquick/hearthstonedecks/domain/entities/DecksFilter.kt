@@ -5,18 +5,8 @@ data class DecksFilter(
     val heroes: Set<Hero>
 ) {
     companion object {
-        val default = DecksFilter("", Hero.values().toSet())
+        val default = DecksFilter("", Hero.entries.toSet())
     }
 
     fun isCustom() = this != default
-
-    override fun equals(other: Any?): Boolean {
-        return super.equals(other)
-    }
-
-    override fun hashCode(): Int {
-        var result = prompt.hashCode()
-        result = 31 * result + heroes.hashCode()
-        return result
-    }
 }

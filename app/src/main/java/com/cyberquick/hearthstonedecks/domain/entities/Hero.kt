@@ -76,7 +76,7 @@ enum class Hero(
     );
 
     companion object {
-        fun from(deckPreview: DeckPreview) = values().firstOrNull {
+        fun from(deckPreview: DeckPreview) = entries.firstOrNull {
             it.nameInApi == deckPreview.gameClass
         }
     }

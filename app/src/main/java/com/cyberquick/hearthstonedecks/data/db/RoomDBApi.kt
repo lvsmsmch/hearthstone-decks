@@ -32,8 +32,17 @@ class RoomDBApi @Inject constructor(
     }
 
     fun getPage(pageNumber: Int, filter: DecksFilter): Page {
-        var totalPages = ceil(deckDao.amountDecks() / ITEMS_ON_A_PAGE.toFloat()).toInt()
-        if (totalPages <1) totalPages = 1
+        val heroesNames = filter.heroes.map { it.nameInApi }
+        if (heroesNames.isEmpty()) {
+            return Page(totalPagesAmount = 1, number = 1, deckPreviews = emptyList())
+        }
+
+        val totalMatching = deckDao.amountDecksFiltered(
+            heroesNames = heroesNames,
+            prompt = filter.prompt,
+        )
+        var totalPages = ceil(totalMatching / ITEMS_ON_A_PAGE.toFloat()).toInt()
+        if (totalPages < 1) totalPages = 1
 
         val pageNumberToLoad = when {
             pageNumber > totalPages -> totalPages
@@ -41,18 +50,16 @@ class RoomDBApi @Inject constructor(
             else -> pageNumber
         }
 
-        val lastIndex = pageNumberToLoad * ITEMS_ON_A_PAGE - 1
-        val firstIndex = lastIndex - ITEMS_ON_A_PAGE + 1
+        val offset = (pageNumberToLoad - 1) * ITEMS_ON_A_PAGE
 
-        val heroesNames = filter.heroes.map { it.nameInApi }
+        val entities = deckDao.getDeckEntitiesFiltered(
+            heroesNames = heroesNames,
+            prompt = filter.prompt,
+            offset = offset,
+            count = ITEMS_ON_A_PAGE,
+        )
 
-        val entities = deckDao.getDeckEntities(firstIndex, lastIndex)
-
-        val deckPreviews = entities
-            .filter { heroesNames.contains(it.gameClass) }
-            .filter { it.title.lowercase().contains(filter.prompt.lowercase()) }
-            .map { dbMapper.toDeckPreview(it) }
-            .reversed()
+        val deckPreviews = entities.map { dbMapper.toDeckPreview(it) }
 
         return Page(totalPages, pageNumberToLoad, deckPreviews)
     }

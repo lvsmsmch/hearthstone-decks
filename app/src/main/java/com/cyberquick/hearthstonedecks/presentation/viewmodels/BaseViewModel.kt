@@ -49,7 +49,13 @@ open class BaseViewModel : ViewModel() {
             if (liveData.value.isLoading() && !allowInterrupt) return@launch
             liveData.postValue(LoadingState.Loading)
             val startTime = System.currentTimeMillis()
-            val response = source()
+            val response = try {
+                source()
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (e: Exception) {
+                Result.Error(e)
+            }
             yield()
             if (response is Result.Error) {
                 val executionTime = System.currentTimeMillis() - startTime

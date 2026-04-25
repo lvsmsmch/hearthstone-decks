@@ -27,8 +27,16 @@ class DeckViewModel @Inject constructor(
 ) : BaseViewModel() {
 
     val stateDeck: LiveData<LoadingState<Deck>> = MutableLiveData()
-    val stateDeckSaved: LiveData<SavedState> = MutableLiveData()
-    val error: LiveData<String?> = MutableLiveData()
+
+    private val _stateDeckSaved = MutableLiveData<SavedState>()
+    val stateDeckSaved: LiveData<SavedState> = _stateDeckSaved
+
+    private val _error = MutableLiveData<String?>()
+    val error: LiveData<String?> = _error
+
+    fun consumeError() {
+        _error.value = null
+    }
 
     fun loadDeck(deckPreview: DeckPreview) {
         if (isDeckLoaded(deckPreview)) return
@@ -38,26 +46,24 @@ class DeckViewModel @Inject constructor(
     }
 
     fun clickedOnSaveButton(deck: Deck, cards: List<Card>) {
-        viewModelScope.launch(createJob() + Dispatchers.IO) {
-            val oldSavedState = stateDeckSaved.value ?: return@launch
+        // Synchronous main-thread guard: rapid double-tap sees Loading immediately
+        // and the second click bails before launching another coroutine.
+        val oldSavedState = _stateDeckSaved.value ?: return
+        if (oldSavedState == SavedState.Loading) return
+        _stateDeckSaved.value = SavedState.Loading
 
+        viewModelScope.launch(createJob() + Dispatchers.IO) {
             val newSavingRequest = when (oldSavedState) {
+                SavedState.NotSaved -> addDeckToFavoriteUseCase(deck.deckPreview)
+                SavedState.Saved -> removeDeckFromFavoriteUseCase(deck.deckPreview)
                 SavedState.Loading -> return@launch
-                SavedState.NotSaved -> {
-                    stateDeckSaved.postValue(SavedState.Loading)
-                    addDeckToFavoriteUseCase(deck.deckPreview)
-                }
-                SavedState.Saved -> {
-                    stateDeckSaved.postValue(SavedState.Loading)
-                    removeDeckFromFavoriteUseCase(deck.deckPreview)
-                }
             }
 
             when (newSavingRequest) {
-                is Result.Success -> stateDeckSaved.postValue(SavedState.opposite(oldSavedState))
+                is Result.Success -> _stateDeckSaved.postValue(SavedState.opposite(oldSavedState))
                 is Result.Error -> {
-                    error.postValue(newSavingRequest.exception.message.toString())
-                    error.postValue(null)
+                    _stateDeckSaved.postValue(oldSavedState)
+                    _error.postValue(newSavingRequest.exception.message.toString())
                 }
             }
         }
@@ -65,7 +71,7 @@ class DeckViewModel @Inject constructor(
 
     fun updateIsDeckSaved(deckPreview: DeckPreview) {
         viewModelScope.launch(createJob() + Dispatchers.IO) {
-            stateDeckSaved.postValue(SavedState.fromResult(isDeckFavoriteUseCase(deckPreview)))
+            _stateDeckSaved.postValue(SavedState.fromResult(isDeckFavoriteUseCase(deckPreview)))
         }
     }
 
@@ -76,7 +82,7 @@ class DeckViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         stateDeck.setToDefault()
-        stateDeckSaved.setToDefault()
-        error.setToDefault()
+        _stateDeckSaved.value = null
+        _error.value = null
     }
 }

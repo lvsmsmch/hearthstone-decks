@@ -81,7 +81,7 @@ class DeckFragment : BaseFragment() {
         DeckViewHolder(DeckViewHolder.Content.fromView(binding.deckPreview)).bind(deckPreview)
 
         binding.deckPreview.cardView.setOnClickListener {
-            requireActivity().onBackPressed()
+            requireActivity().onBackPressedDispatcher.onBackPressed()
         }
     }
 
@@ -160,7 +160,9 @@ class DeckFragment : BaseFragment() {
         }
 
         viewModel.error.observe(viewLifecycleOwner) { message ->
+            if (message == null) return@observe
             toast(message)
+            viewModel.consumeError()
         }
 
         viewModel.updateIsDeckSaved(deckPreview)

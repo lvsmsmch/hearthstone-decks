@@ -17,8 +17,10 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
 @Module
@@ -42,32 +44,38 @@ class DataModule {
     companion object {
         private const val BLIZZARD_API_URL = "https://eu.api.blizzard.com/"
         private const val BLIZZARD_OAUTH_URL = "https://us.battle.net/"
-    }
-
-    private class RetrofitBuilder<API_TYPE>(
-        private val apiClass: Class<API_TYPE>,
-        private val baseUrl: String
-    ) {
-        fun build(): API_TYPE =
-            Retrofit.Builder()
-                .addConverterFactory(GsonConverterFactory.create())
-                .baseUrl(baseUrl)
-                .build()
-                .create(apiClass)
+        private const val HTTP_TIMEOUT_SECONDS = 15L
     }
 
     @Provides
     @Singleton
-    fun provideOAuthApi(): OAuthApi = RetrofitBuilder(
-        OAuthApi::class.java, BLIZZARD_OAUTH_URL
-    ).build()
+    fun provideHttpClient(): OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(HTTP_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .readTimeout(HTTP_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .writeTimeout(HTTP_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .build()
 
+    private fun <API_TYPE> retrofit(
+        client: OkHttpClient,
+        baseUrl: String,
+        apiClass: Class<API_TYPE>,
+    ): API_TYPE =
+        Retrofit.Builder()
+            .client(client)
+            .addConverterFactory(GsonConverterFactory.create())
+            .baseUrl(baseUrl)
+            .build()
+            .create(apiClass)
 
     @Provides
     @Singleton
-    fun provideCardsApi(): BattleNetApi = RetrofitBuilder(
-        BattleNetApi::class.java, BLIZZARD_API_URL
-    ).build()
+    fun provideOAuthApi(client: OkHttpClient): OAuthApi =
+        retrofit(client, BLIZZARD_OAUTH_URL, OAuthApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideCardsApi(client: OkHttpClient): BattleNetApi =
+        retrofit(client, BLIZZARD_API_URL, BattleNetApi::class.java)
 
 
 

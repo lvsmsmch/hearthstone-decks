@@ -15,7 +15,7 @@ class HeroAdapter(
     override val layoutRes = R.layout.item_hero_choosable
 
     init {
-        set(Hero.values().toList())
+        set(Hero.entries)
     }
 
     override fun createViewHolder(view: View) = HeroViewHolder(view)
@@ -30,7 +30,7 @@ class HeroAdapter(
                     false -> currentlySelected.remove(item)
                 }
 
-                val isAllSelected = currentlySelected.size == Hero.values().size
+                val isAllSelected = currentlySelected.size == Hero.entries.size
                 isAllSelectedListener(isAllSelected)
             }
         )
@@ -41,7 +41,7 @@ class HeroAdapter(
     }
 
     fun selectAll() {
-        select(Hero.values().toSet())
+        select(Hero.entries.toSet())
     }
 
     fun unselectAll() {

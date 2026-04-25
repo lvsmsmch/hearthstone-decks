@@ -7,17 +7,23 @@ import com.cyberquick.hearthstonedecks.domain.common.Result
 import com.cyberquick.hearthstonedecks.domain.entities.Card
 import com.cyberquick.hearthstonedecks.domain.entities.Expansion
 import com.cyberquick.hearthstonedecks.domain.entities.ExpansionYear
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import retrofit2.Call
+import retrofit2.HttpException
 import java.lang.Exception
 import java.util.Locale
 import javax.inject.Inject
+import javax.inject.Singleton
 
+@Singleton
 class BattleNetRepository @Inject constructor(
     private val oAuthApi: OAuthApi,
     private val battleNetApi: BattleNetApi,
 ) {
 
-    private var currentToken: String? = null
+    private val tokenMutex = Mutex()
+    @Volatile private var currentToken: String? = null
 
     suspend fun retrieveCards(code: String): Result<List<Card>> {
         Log.d("tag_network", "retrieveCards...")
@@ -63,35 +69,56 @@ class BattleNetRepository @Inject constructor(
         createNetworkCall: suspend () -> Call<T>
     ): Result<T> {
         if (currentToken == null) {
-            currentToken = when (val tokenResult = getToken()) {
-                is Result.Success -> tokenResult.data
+            when (val tokenResult = ensureFreshToken(staleToken = null)) {
+                is Result.Success -> Unit
                 is Result.Error -> return Result.Error(tokenResult.exception)
             }
         }
 
+        val firstAttempt = createNetworkCall().getResult()
+        if (firstAttempt is Result.Success) return firstAttempt
 
-        return when (val result = createNetworkCall().getResult()) {
-            is Result.Success -> result
-            else -> {
-                when (val tokenResult = getToken()) {
-                    is Result.Success -> {
-                        currentToken = tokenResult.data
-                        createNetworkCall().getResult()
-                    }
+        // Retry only if the failure looks like an auth issue (401/403 from Blizzard).
+        // Other failures (network, 5xx, parse) are returned as-is to avoid wasting an
+        // OAuth round-trip on every transient hiccup.
+        val staleToken = currentToken
+        val firstError = (firstAttempt as Result.Error).exception
+        if (!firstError.looksLikeAuthFailure()) return firstAttempt
 
-                    is Result.Error -> Result.Error(tokenResult.exception)
-                }
-            }
+        return when (val tokenResult = ensureFreshToken(staleToken = staleToken)) {
+            is Result.Success -> createNetworkCall().getResult()
+            is Result.Error -> Result.Error(tokenResult.exception)
         }
     }
 
-    private suspend fun getToken(): Result<String> {
+    private suspend fun ensureFreshToken(staleToken: String?): Result<String> = tokenMutex.withLock {
+        // If another caller already replaced the stale token while we were waiting,
+        // skip the network call and reuse what's there.
+        currentToken?.let { existing ->
+            if (existing != staleToken) return@withLock Result.Success(existing)
+        }
+        when (val fetched = fetchToken()) {
+            is Result.Success -> {
+                currentToken = fetched.data
+                Result.Success(fetched.data)
+            }
+            is Result.Error -> Result.Error(fetched.exception)
+        }
+    }
+
+    private suspend fun fetchToken(): Result<String> {
         return try {
             val token = oAuthApi.retrieveOAuth().access_token
             Result.Success(token)
         } catch (e: Exception) {
             Result.Error(e)
         }
+    }
+
+    private fun Throwable.looksLikeAuthFailure(): Boolean {
+        if (this is HttpException) return code() == 401 || code() == 403
+        val msg = message.orEmpty()
+        return msg.startsWith("401 ") || msg.startsWith("403 ")
     }
 
     /**
@@ -122,9 +149,12 @@ class BattleNetRepository @Inject constructor(
     private fun <T> Call<T>.getResult(): Result<T> {
         return try {
             val response = this.execute()
-            return when (response.isSuccessful) {
-                true -> Result.Success(response.body()!!)
-                false -> Result.Error(Exception("${response.code()} ${response.message()}"))
+            when {
+                !response.isSuccessful ->
+                    Result.Error(Exception("${response.code()} ${response.message()}"))
+                else -> response.body()
+                    ?.let { Result.Success(it) }
+                    ?: Result.Error(Exception("Empty response body (HTTP ${response.code()})"))
             }
         } catch (e: Exception) {
             Result.Error(e)

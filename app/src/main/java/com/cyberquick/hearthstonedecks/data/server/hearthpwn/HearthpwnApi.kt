@@ -9,11 +9,15 @@ import com.cyberquick.hearthstonedecks.domain.entities.DecksFilter
 import com.cyberquick.hearthstonedecks.domain.entities.Page
 import com.cyberquick.hearthstonedecks.domain.exceptions.LoadFailedException
 import com.cyberquick.hearthstonedecks.domain.exceptions.NoOnlineDecksFoundException
+import kotlinx.coroutines.suspendCancellableCoroutine
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import org.jsoup.HttpStatusException
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
@@ -21,7 +25,11 @@ import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
+import javax.inject.Singleton
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
+@Singleton
 class HearthpwnApi @Inject constructor() {
 
     companion object {
@@ -54,7 +62,7 @@ class HearthpwnApi @Inject constructor() {
             .build()
     }
 
-    private fun getDocument(url: String): Document {
+    private suspend fun getDocument(url: String): Document {
         var lastFailure: Throwable? = null
 
         for (ua in USER_AGENTS) {
@@ -71,7 +79,7 @@ class HearthpwnApi @Inject constructor() {
 
             Log.d("tag_hp_403", "REQ ua=$ua -> $url")
             try {
-                httpClient.newCall(request).execute().use { response ->
+                httpClient.newCall(request).awaitResponse().use { response ->
                     val status = response.code
                     val server = response.header("server")
                     val cfMitigated = response.header("cf-mitigated")
@@ -108,6 +116,27 @@ class HearthpwnApi @Inject constructor() {
             ?: IOException("HTTP error fetching URL. Status=-1, URL=[$url] (all UA attempts failed)")
     }
 
+    /**
+     * Bridge OkHttp's async API into a suspend function whose cancellation
+     * actually aborts the in-flight HTTP request (vs. blocking execute(),
+     * which keeps running and just discards the result).
+     */
+    private suspend fun Call.awaitResponse(): Response =
+        suspendCancellableCoroutine { cont ->
+            enqueue(object : Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    if (cont.isActive) cont.resumeWithException(e)
+                }
+                override fun onResponse(call: Call, response: Response) {
+                    if (cont.isActive) cont.resume(response)
+                    else response.close()
+                }
+            })
+            cont.invokeOnCancellation {
+                runCatching { cancel() }
+            }
+        }
+
     private class InMemoryCookieJar : CookieJar {
         private val store = ConcurrentHashMap<String, MutableList<Cookie>>()
 
@@ -138,7 +167,7 @@ class HearthpwnApi @Inject constructor() {
      * https://www.hearthpwn.com/decks?filter-search=pirate&filter-show-standard=1&filter-show-constructed-only=y&filter-deck-tag=2&filter-class=128
      */
 
-    fun getPage(
+    suspend fun getPage(
         pageNumber: Int,
         gameFormatToLoad: GameFormat,
         filter: DecksFilter
@@ -186,98 +215,103 @@ class HearthpwnApi @Inject constructor() {
                 val lastNumber = paginationNumbers.eq(paginationNumbers.size - 1)
                 var result = lastNumber.select("a").text()
                 if (result.isBlank()) result = lastNumber.select("span").text()
-                return@let result.toInt()
+                return@let result.toIntOrNull() ?: 1
             }
 
 
         for (i in 0 until element.size) {
             val currentElement = element.eq(i)
-            val title = currentElement
-                .select("td.col-name")
-                .select("div")
-                .select("span.tip")
-                .select("a")
-                .text()
+            try {
+                val title = currentElement
+                    .select("td.col-name")
+                    .select("div")
+                    .select("span.tip")
+                    .select("a")
+                    .text()
 
-            val gameClass = currentElement
-                .select("td.col-class")
-                .text()
+                val gameClass = currentElement
+                    .select("td.col-class")
+                    .text()
 
-            val dust = currentElement
-                .select("td.col-dust-cost")
-                .text()
+                val dust = currentElement
+                    .select("td.col-dust-cost")
+                    .text()
 
-            val timeCreated = currentElement
-                .select("td.col-updated")
-                .select("abbr")
-                .attr("title")
-                .let { return@let formatToCorrectDate(it) }
+                val timeCreated = currentElement
+                    .select("td.col-updated")
+                    .select("abbr")
+                    .attr("title")
+                    .let { return@let formatToCorrectDate(it) }
 
-            val timeEpoch = currentElement
-                .select("td.col-updated")
-                .select("abbr")
-                .attr("data-epoch")
+                val timeEpoch = currentElement
+                    .select("td.col-updated")
+                    .select("abbr")
+                    .attr("data-epoch")
 
-            Log.d("tag_api", "timeEpoch $timeEpoch")
+                Log.d("tag_api", "timeEpoch $timeEpoch")
 
-            val detailsUrl = URL_ROOT + currentElement
-                .select("td.col-name")
-                .select("div")
-                .select("span.tip")
-                .select("a")
-                .attr("href")
+                val detailsUrl = URL_ROOT + currentElement
+                    .select("td.col-name")
+                    .select("div")
+                    .select("span.tip")
+                    .select("a")
+                    .attr("href")
 
-            val gameFormat = currentElement
-                .select("td.col-deck-type")
-                .select("span")
-                .attr("class")
+                val gameFormat = currentElement
+                    .select("td.col-deck-type")
+                    .select("span")
+                    .attr("class")
 
-            val views = currentElement
-                .select("td.col-views")
-                .text()
-                .toIntOrNull() ?: 0
+                val views = currentElement
+                    .select("td.col-views")
+                    .text()
+                    .toIntOrNull() ?: 0
 
-            val author = currentElement
-                .select("td.col-name")
-                .select("div")
-                .select("small")
-                .select("a")
-                .text()
+                val author = currentElement
+                    .select("td.col-name")
+                    .select("div")
+                    .select("small")
+                    .select("a")
+                    .text()
 
-            val rating = currentElement
-                .select("td.col-ratings")
-                .select("div")
-                .text()
+                val rating = currentElement
+                    .select("td.col-ratings")
+                    .select("div")
+                    .text()
 
-            val deckType = currentElement
-                .select("td.col-deck-type")
-                .select("span")
-                .text()
+                val deckType = currentElement
+                    .select("td.col-deck-type")
+                    .select("span")
+                    .text()
 
-            Log.i("tag_fix_crash", "Details url $i: $detailsUrl")
-            val id = detailsUrl.substringAfterLast("/").substringBefore("-").toInt()
+                Log.i("tag_fix_crash", "Details url $i: $detailsUrl")
+                val id = detailsUrl.substringAfterLast("/").substringBefore("-").toIntOrNull()
+                    ?: continue
 
-            deckPreviews.add(
-                DeckPreview(
-                    id = id,
-                    title = title,
-                    gameClass = gameClass,
-                    dust = dust,
-                    timeCreated = timeCreated,
-                    deckUrl = detailsUrl,
-                    gameFormat = gameFormat,
-                    views = views,
-                    author = author,
-                    rating = rating,
-                    deckType = deckType,
-                ),
-            )
+                deckPreviews.add(
+                    DeckPreview(
+                        id = id,
+                        title = title,
+                        gameClass = gameClass,
+                        dust = dust,
+                        timeCreated = timeCreated,
+                        deckUrl = detailsUrl,
+                        gameFormat = gameFormat,
+                        views = views,
+                        author = author,
+                        rating = rating,
+                        deckType = deckType,
+                    ),
+                )
+            } catch (e: Exception) {
+                Log.w("tag_api", "Skipping malformed deck row $i: ${e.javaClass.simpleName}: ${e.message}")
+            }
         }
 
         return Result.Success(Page(totalPages, pageNumber, deckPreviews))
     }
 
-    fun getDeckDetails(deckPreview: DeckPreview): Result<DeckDetails> {
+    suspend fun getDeckDetails(deckPreview: DeckPreview): Result<DeckDetails> {
         val document = try {
             getDocument(url = deckPreview.deckUrl)
         } catch (e: IOException) {

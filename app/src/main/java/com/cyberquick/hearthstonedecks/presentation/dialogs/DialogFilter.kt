@@ -88,7 +88,7 @@ class DialogFilter(
                 activity, 6, RecyclerView.VERTICAL, false
             )
 
-            isAllItemsSelected = previousFilter.heroes.size == Hero.values().size
+            isAllItemsSelected = previousFilter.heroes.size == Hero.entries.size
             binding.checkboxSelectAll.isChecked = isAllItemsSelected
 
             val selectAllListener = OnClickListener {

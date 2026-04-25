@@ -8,7 +8,6 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.cyberquick.hearthstonedecks.R
 import com.cyberquick.hearthstonedecks.databinding.FragmentPageBinding
 import com.cyberquick.hearthstonedecks.domain.common.deckPreviewToJson
-import com.cyberquick.hearthstonedecks.domain.entities.Hero
 import com.cyberquick.hearthstonedecks.domain.exceptions.NoOnlineDecksFoundException
 import com.cyberquick.hearthstonedecks.domain.exceptions.NoSavedDecksFoundException
 import com.cyberquick.hearthstonedecks.presentation.adapters.DeckAdapter
@@ -83,8 +82,6 @@ abstract class PageFragment : BaseFragment(), MenuProvider {
         binding.recycleViewDecks.adapter = DeckAdapter(
             onClickListener = { data ->
                 logFirebaseEvent(context, Event.DECK_VIEW, data.deckPreview.gameFormat)
-                Hero.from(data.deckPreview)
-                data.deckPreview.gameClass
                 val fragment = DeckFragment()
                 fragment.arguments = Bundle().apply {
                     putString(DeckFragment.KEY_DECK_PREVIEW, deckPreviewToJson(data.deckPreview))
@@ -197,7 +194,9 @@ abstract class PageFragment : BaseFragment(), MenuProvider {
 
     override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
         menuInflater.inflate(R.menu.menu_fragment_deck, menu)
-        menu.updateButtons(viewModel.allowNavigation.value!!)
+        val allow = viewModel.allowNavigation.value
+            ?: PageViewModel.AllowNavigation(previous = false, next = false)
+        menu.updateButtons(allow)
         menu.findItem(R.id.menu_button_filter).icon?.setTint(color(R.color.text_1))
         this._menu = menu
     }
