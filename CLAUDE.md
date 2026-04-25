@@ -43,7 +43,7 @@ Clean-architecture layout under `app/src/main/java/com/cyberquick/hearthstonedec
 `OnlineDecksImpl` composes two unrelated remote sources:
 
 1. **`HearthpwnApi`** — *not* Retrofit. Scrapes `https://www.hearthpwn.com` HTML with Jsoup to produce `Page`/`DeckPreview` listings and per-deck description + deck code. CSS selectors are hard-coded and brittle; if listings break, hearthpwn changed its DOM. URL templates and selectors live at the top of `HearthpwnApi.kt`.
-2. **`BattleNetRepository`** — Retrofit against Blizzard's official API. Used to expand a deck code into actual `Card` data. Handles OAuth: caches `currentToken`, retries once on failure by re-fetching a token. Region is hard-coded to `"eu"` in `getUserRegion()`; locale is mapped from `Locale.getDefault()`.
+2. **`BattleNetRepository`** — Retrofit against Blizzard's official API. Used to expand a deck code into actual `Card` data. Handles OAuth: caches `currentToken` behind a `Mutex` so concurrent callers share one fetch, and only retries on auth-looking failures (HTTP 401/403) — other errors return as-is to avoid burning OAuth round-trips on transient hiccups. Region is baked into `BLIZZARD_API_URL` in `DataModule` (the host is `{region}.api.blizzard.com`, **not** a query param); `getUserRegion()` survives only as a logging helper. `getUserLanguage()` maps `Locale.getDefault()` onto the 13 locales the Hearthstone API actually supports (`de_DE, en_US, es_ES, es_MX, fr_FR, it_IT, ja_JP, ko_KR, pl_PL, pt_BR, ru_RU, th_TH, zh_TW`) — see `.claude/battle_net_api.txt` for the full Hearthstone API reference.
 
 `OnlineDecksImpl.getDeck` chains them: hearthpwn → deck code + description, then battle.net → cards.
 
@@ -71,6 +71,6 @@ Stick to this pattern for new async flows rather than exposing raw coroutines/`R
 
 - Hilt is the only DI; use `@Inject constructor` and add `@Provides` to `DataModule` for things you can't construct directly.
 - View binding is enabled (`buildFeatures.viewBinding true`); fragments use generated `FragmentXxxBinding`. Don't pull in Compose or DataBinding.
-- Logging uses `android.util.Log` with ad-hoc tags (`tag_network`, `tag_sets`, `tag_api`, …) — match the surrounding style rather than introducing Timber.
+- Logging uses `android.util.Log` with ad-hoc tags (`tag_network`, `tag_sets`, `tag_api`, …) — match the surrounding style rather than introducing Timber. Wrap diagnostic `Log.d` / `Log.i` with `if (BuildConfig.DEBUG) { … }` (especially for anything that includes user/device data, FCM tokens, HTTP bodies, or per-row hot-loop logs). `minifyEnabled false` for release means `Log.x` is **not** stripped by R8 and is visible via `adb logcat` on shipping builds; the wrap also avoids paying the string-concatenation cost in release.
 - User-facing strings live in `app/src/main/res/values*/strings.xml` (many translations). Don't hard-code UI text in Kotlin.
 - Firebase event names are centralized in `utils/FirebaseEvents.kt` (`Event` enum) — log via `logFirebaseEvent(context, Event.X)`.

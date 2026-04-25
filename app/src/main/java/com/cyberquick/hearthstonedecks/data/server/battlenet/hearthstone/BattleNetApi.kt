@@ -9,22 +9,19 @@ interface BattleNetApi {
     @GET("hearthstone/deck")
     fun getDeck(
         @Header("Authorization") token: String,
-        @Query(":region") region: String = "eu",
-        @Query("locale") locale: String = "en_EU",
+        @Query("locale") locale: String,
         @Query("code") code: String,
     ): Call<DeckResponse>
 
-    @GET("/hearthstone/metadata/sets")
+    @GET("hearthstone/metadata/sets")
     fun getSets(
         @Header("Authorization") token: String,
-        @Query(":region") region: String = "eu",
-        @Query("locale") locale: String = "en_EU",
+        @Query("locale") locale: String,
     ): Call<List<Expansion>>
 
-    @GET("/hearthstone/metadata/setGroups")
+    @GET("hearthstone/metadata/setGroups")
     fun getSetGroups(
         @Header("Authorization") token: String,
-        @Query(":region") region: String = "eu",
-        @Query("locale") locale: String = "en_EU",
+        @Query("locale") locale: String,
     ): Call<List<ExpansionYear>>
 }

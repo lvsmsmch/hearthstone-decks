@@ -1,6 +1,7 @@
 package com.cyberquick.hearthstonedecks.data.server.battlenet
 
 import android.util.Log
+import com.cyberquick.hearthstonedecks.BuildConfig
 import com.cyberquick.hearthstonedecks.data.server.battlenet.hearthstone.BattleNetApi
 import com.cyberquick.hearthstonedecks.data.server.battlenet.oauth.OAuthApi
 import com.cyberquick.hearthstonedecks.domain.common.Result
@@ -26,14 +27,15 @@ class BattleNetRepository @Inject constructor(
     @Volatile private var currentToken: String? = null
 
     suspend fun retrieveCards(code: String): Result<List<Card>> {
-        Log.d("tag_network", "retrieveCards...")
-        Log.d("tag_network", "getUserRegion = ${getUserRegion()}")
-        Log.d("tag_network", "getUserLanguage = ${getUserLanguage()}")
+        if (BuildConfig.DEBUG) {
+            Log.d("tag_network", "retrieveCards...")
+            Log.d("tag_network", "getUserRegion = ${getUserRegion()}")
+            Log.d("tag_network", "getUserLanguage = ${getUserLanguage()}")
+        }
         return doCall(
             createNetworkCall = {
                 battleNetApi.getDeck(
                     token = "Bearer $currentToken",
-                    region = getUserRegion(),
                     locale = getUserLanguage(),
                     code = code,
                 )
@@ -46,7 +48,6 @@ class BattleNetRepository @Inject constructor(
             createNetworkCall = {
                 battleNetApi.getSets(
                     token = "Bearer $currentToken",
-                    region = getUserRegion(),
                     locale = getUserLanguage(),
                 )
             }
@@ -58,7 +59,6 @@ class BattleNetRepository @Inject constructor(
             createNetworkCall = {
                 battleNetApi.getSetGroups(
                     token = "Bearer $currentToken",
-                    region = getUserRegion(),
                     locale = getUserLanguage(),
                 )
             }
@@ -122,12 +122,15 @@ class BattleNetRepository @Inject constructor(
     }
 
     /**
-     * Might be US, EU, KR, TW, CN
+     * Might be US, EU, KR, TW, CN. The hostname is fixed in DataModule
+     * (BLIZZARD_API_URL) — this is kept for logging only.
      */
     private fun getUserRegion(): String {
         return "eu"
     }
 
+    // Locales supported by the Hearthstone API. Anything else falls back to en_US.
+    // See battle_net_api.txt (Localization).
     private fun getUserLanguage(): String {
         return when (Locale.getDefault().language) {
             "de" -> "de_DE"
@@ -138,10 +141,10 @@ class BattleNetRepository @Inject constructor(
             "ja" -> "ja_JP"
             "ko" -> "ko_KR"
             "pl" -> "pl_PL"
-            "pt" -> if (Locale.getDefault().country == "BR") "pt_BR" else "pt_PT"
+            "pt" -> "pt_BR"
             "ru" -> "ru_RU"
             "th" -> "th_TH"
-            "zh" -> if (Locale.getDefault().country == "TW") "zh_TW" else "zh_CN"
+            "zh" -> "zh_TW"
             else -> "en_US"
         }
     }

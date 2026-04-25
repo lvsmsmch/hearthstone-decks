@@ -2,6 +2,7 @@ package com.cyberquick.hearthstonedecks.data.repository
 
 import android.content.Context
 import android.util.Log
+import com.cyberquick.hearthstonedecks.BuildConfig
 import com.cyberquick.hearthstonedecks.R
 import com.cyberquick.hearthstonedecks.data.server.battlenet.BattleNetRepository
 import com.cyberquick.hearthstonedecks.domain.entities.DataAboutSet
@@ -64,21 +65,25 @@ class SetsImpl @Inject constructor(
         val resultSets = battleNetApi.retrieveSets()
         resultSets.asSuccess()?.let {
             setsFromOnline = it.data
-            Log.d("tag_sets", "setsFromOnline() - good")
+            if (BuildConfig.DEBUG) Log.d("tag_sets", "setsFromOnline() - good")
         }
         resultSets.asError()?.let {
-            Log.d("tag_sets", "setsFromOnline() - bad")
-            Log.d("tag_sets", it.exception.message.toString())
+            if (BuildConfig.DEBUG) {
+                Log.d("tag_sets", "setsFromOnline() - bad")
+                Log.d("tag_sets", it.exception.message.toString())
+            }
         }
 
         val resultSetGroups = battleNetApi.retrieveSetGroups()
         resultSetGroups.asSuccess()?.let {
             setGroupsFromOnline = it.data
-            Log.d("tag_sets", "setGroupsFromOnline() - good")
+            if (BuildConfig.DEBUG) Log.d("tag_sets", "setGroupsFromOnline() - good")
         }
         resultSetGroups.asError()?.let {
-            Log.d("tag_sets", "setGroupsFromOnline() - bad")
-            Log.d("tag_sets", it.exception.message.toString())
+            if (BuildConfig.DEBUG) {
+                Log.d("tag_sets", "setGroupsFromOnline() - bad")
+                Log.d("tag_sets", it.exception.message.toString())
+            }
         }
     }
 

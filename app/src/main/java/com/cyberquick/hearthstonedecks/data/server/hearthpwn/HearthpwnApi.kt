@@ -1,6 +1,7 @@
 package com.cyberquick.hearthstonedecks.data.server.hearthpwn
 
 import android.util.Log
+import com.cyberquick.hearthstonedecks.BuildConfig
 import com.cyberquick.hearthstonedecks.data.server.entities.DeckDetails
 import com.cyberquick.hearthstonedecks.domain.common.Result
 import com.cyberquick.hearthstonedecks.domain.entities.DeckPreview
@@ -77,29 +78,33 @@ class HearthpwnApi @Inject constructor() {
                 .header("Referer", "$URL_ROOT/")
                 .build()
 
-            Log.d("tag_hp_403", "REQ ua=$ua -> $url")
+            if (BuildConfig.DEBUG) Log.d("tag_hp_403", "REQ ua=$ua -> $url")
             try {
                 httpClient.newCall(request).awaitResponse().use { response ->
                     val status = response.code
-                    val server = response.header("server")
-                    val cfMitigated = response.header("cf-mitigated")
-                    val cfRay = response.header("cf-ray")
-                    val contentType = response.header("content-type")
                     val body = response.body?.string().orEmpty()
-                    val sample = body.take(400).replace("\n", " ")
 
-                    Log.d(
-                        "tag_hp_403",
-                        "RES ua=$ua status=$status server=$server cf-mitigated=$cfMitigated " +
-                                "cf-ray=$cfRay content-type=$contentType cookies=${cookieJar.snapshotForHost(request.url.host).size}"
-                    )
+                    if (BuildConfig.DEBUG) {
+                        val server = response.header("server")
+                        val cfMitigated = response.header("cf-mitigated")
+                        val cfRay = response.header("cf-ray")
+                        val contentType = response.header("content-type")
+                        Log.d(
+                            "tag_hp_403",
+                            "RES ua=$ua status=$status server=$server cf-mitigated=$cfMitigated " +
+                                    "cf-ray=$cfRay content-type=$contentType cookies=${cookieJar.snapshotForHost(request.url.host).size}"
+                        )
+                    }
 
                     if (status in 200..299) {
-                        Log.d("tag_hp_403", "OK ua=$ua bodyLen=${body.length}")
+                        if (BuildConfig.DEBUG) Log.d("tag_hp_403", "OK ua=$ua bodyLen=${body.length}")
                         return Jsoup.parse(body, url)
                     }
 
-                    Log.d("tag_hp_403", "BODY[0..400]: $sample")
+                    if (BuildConfig.DEBUG) {
+                        val sample = body.take(400).replace("\n", " ")
+                        Log.d("tag_hp_403", "BODY[0..400]: $sample")
+                    }
                     lastFailure = HttpStatusException(
                         "HTTP error fetching URL. Status=$status, URL=[$url]",
                         status,
@@ -107,7 +112,9 @@ class HearthpwnApi @Inject constructor() {
                     )
                 }
             } catch (e: IOException) {
-                Log.d("tag_hp_403", "IO failure ua=$ua: ${e.javaClass.simpleName}: ${e.message}")
+                if (BuildConfig.DEBUG) {
+                    Log.d("tag_hp_403", "IO failure ua=$ua: ${e.javaClass.simpleName}: ${e.message}")
+                }
                 lastFailure = e
             }
         }
@@ -248,7 +255,7 @@ class HearthpwnApi @Inject constructor() {
                     .select("abbr")
                     .attr("data-epoch")
 
-                Log.d("tag_api", "timeEpoch $timeEpoch")
+                if (BuildConfig.DEBUG) Log.d("tag_api", "timeEpoch $timeEpoch")
 
                 val detailsUrl = URL_ROOT + currentElement
                     .select("td.col-name")
@@ -284,7 +291,7 @@ class HearthpwnApi @Inject constructor() {
                     .select("span")
                     .text()
 
-                Log.i("tag_fix_crash", "Details url $i: $detailsUrl")
+                if (BuildConfig.DEBUG) Log.i("tag_fix_crash", "Details url $i: $detailsUrl")
                 val id = detailsUrl.substringAfterLast("/").substringBefore("-").toIntOrNull()
                     ?: continue
 

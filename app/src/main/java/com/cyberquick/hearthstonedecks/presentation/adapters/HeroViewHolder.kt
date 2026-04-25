@@ -1,7 +1,6 @@
 package com.cyberquick.hearthstonedecks.presentation.adapters
 
 import android.annotation.SuppressLint
-import android.util.Log
 import android.view.View
 import android.widget.ImageView
 import android.widget.TextView
@@ -19,7 +18,6 @@ class HeroViewHolder(val view: View) : RecyclerView.ViewHolder(view) {
         isSelected: Boolean,
         onSelectedListener: (Boolean) -> Unit,
     ) {
-        Log.i("tag_hero", "Bind ${item.nameInApi}, is checked = $isSelected")
         view.findViewById<TextView>(R.id.item_hero_name).setText(item.nameRes)
         val imageView = view.findViewById<ImageView>(R.id.item_hero_icon)
         imageView.setImageDrawable(view.context.drawable(item.iconRes))
