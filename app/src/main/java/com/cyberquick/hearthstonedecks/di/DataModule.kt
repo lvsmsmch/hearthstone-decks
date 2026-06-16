@@ -31,16 +31,12 @@ class DataModule {
     @Singleton
     fun provideContext(appInstance: Application): Context = appInstance.applicationContext
 
-    // database
     @Provides
     @Singleton
     fun provideAppDatabase(application: Application) = Room
         .databaseBuilder(application, RoomDB::class.java, DATABASE_NAME)
-//        .fallbackToDestructiveMigration()
         .build()
 
-
-    // retrofit
     companion object {
         private const val BLIZZARD_API_URL = "https://eu.api.blizzard.com/"
         private const val BLIZZARD_OAUTH_URL = "https://us.battle.net/"
@@ -76,17 +72,6 @@ class DataModule {
     @Singleton
     fun provideCardsApi(client: OkHttpClient): BattleNetApi =
         retrofit(client, BLIZZARD_API_URL, BattleNetApi::class.java)
-
-
-
-    // other
-//    @Provides
-//    @Singleton
-//    fun provideBattleNetApi(
-//        oAuthApi: OAuthApi,
-//        deckApi: DeckApi,
-//        metadataApi: MetadataApi,
-//    ) = BattleNetApi(oAuthApi, deckApi, metadataApi)
 
     @Provides
     fun provideDeckDao(appDatabase: RoomDB) = appDatabase.deckDao()

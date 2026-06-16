@@ -129,8 +129,6 @@ class BattleNetRepository @Inject constructor(
         return "eu"
     }
 
-    // Locales supported by the Hearthstone API. Anything else falls back to en_US.
-    // See battle_net_api.txt (Localization).
     private fun getUserLanguage(): String {
         return when (Locale.getDefault().language) {
             "de" -> "de_DE"

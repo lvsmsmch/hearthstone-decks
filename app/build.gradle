@@ -3,8 +3,11 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.kapt)
     alias(libs.plugins.hilt)
-    alias(libs.plugins.google.services)
-    alias(libs.plugins.firebase.crashlytics)
+}
+
+if (file("google-services.json").exists()) {
+    apply plugin: "com.google.gms.google-services"
+    apply plugin: "com.google.firebase.crashlytics"
 }
 
 def localProperties = new Properties()

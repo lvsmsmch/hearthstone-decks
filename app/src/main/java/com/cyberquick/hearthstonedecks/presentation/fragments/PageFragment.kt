@@ -126,7 +126,6 @@ abstract class PageFragment : BaseFragment(), MenuProvider {
             }
         }
 
-        // do on resume maybe
         viewModel.updateCurrentPage(evenIfLoaded = this is FavoritePageFragment)
     }
 

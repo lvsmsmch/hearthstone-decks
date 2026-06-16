@@ -39,8 +39,6 @@ class SetsImpl @Inject constructor(
 
     override fun refreshSets() {
         scope.launch {
-            // Idempotent: while one refresh is in flight, additional calls (e.g. from
-            // a fresh activity) join it instead of stacking N parallel HTTP fetches.
             if (!refreshMutex.tryLock()) return@launch
             try {
                 refreshLocal()
@@ -123,14 +121,4 @@ class SetsImpl @Inject constructor(
         val tagGroupType = object : TypeToken<List<T>>() {}.type
         return gson.fromJson(jsonString, tagGroupType)
     }
-
-//    private fun getJsonFromResource(resourceId: Int): String {
-//        val inputStream = context.resources.openRawResource(resourceId)
-//        return Scanner(inputStream).useDelimiter("\\A").next()
-//    }
-//
-//    private inline fun <reified T> getListOfObjectFromJson(jsonString: String): List<T> {
-//        val tagGroupType = object : TypeToken<List<T>>() {}.type
-//        return Gson().fromJson(jsonString, tagGroupType)
-//    }
 }

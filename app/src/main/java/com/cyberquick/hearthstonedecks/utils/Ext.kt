@@ -179,14 +179,6 @@ fun View.setupFullHeight() {
     layoutParams = previousLayoutParams
 }
 
-//fun Window.statusBarHeight(): Int {
-//    val rectangle = Rect()
-//    decorView.getWindowVisibleDisplayFrame(rectangle)
-//    val statusBarHeight = rectangle.top
-//    val contentViewTop = findViewById<View>(Window.ID_ANDROID_CONTENT).top
-//    return contentViewTop - statusBarHeight
-//}
-
 private fun Context.pixelsOfIdentifier(name: String, defaultDp: Int): Int {
     val resourceId = resources.getIdentifier(name, "dimen", "android")
     return if (resourceId > 0) resources.getDimensionPixelSize(resourceId)
